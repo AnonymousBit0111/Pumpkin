@@ -200,6 +200,33 @@ impl Client {
         }
     }
 
+    /// Queue a Clientbound Packet to the Client, this packet only gets sent when flush_queue is called
+    pub async fn queue_packet<P: ClientPacket>(&self, packet: &P) {
+        //log::debug!("Sending packet with id {} to {}", P::PACKET_ID, self.id);
+        // assert!(!self.closed);
+        let mut enc = self.enc.lock().await;
+        if let Err(error) = enc.append_packet(packet) {
+            self.kick(&error.to_string()).await;
+            return;
+        }
+
+        let mut writer = self.connection_writer.lock().await;
+        if let Err(error) = writer
+            .write_all(&enc.take())
+            .await
+            .map_err(|_| PacketError::ConnectionWrite)
+        {
+            self.kick(&error.to_string()).await;
+        }
+    }
+    // flush the packet writer
+    pub async fn flush_queue(&self) {
+        let mut writer = self.connection_writer.lock().await;
+        if let Err(error) = writer.flush().await {
+            log::warn!("Failed to flush writer for: {}", error.to_string());
+        }
+    }
+
     pub async fn try_send_packet<P: ClientPacket>(&self, packet: &P) -> Result<(), PacketError> {
         // assert!(!self.closed);
         /*

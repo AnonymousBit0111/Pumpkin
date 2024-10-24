@@ -111,9 +111,10 @@ pub async fn update_position(player: &Player) {
                 {
                     player
                         .client
-                        .send_packet(&CUnloadChunk::new(chunk.x, chunk.z))
+                        .queue_packet(&CUnloadChunk::new(chunk.x, chunk.z))
                         .await;
                 }
+                player.client.flush_queue().await;
             }
         }
     }
