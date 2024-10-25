@@ -67,7 +67,7 @@ impl Player {
             }
         } else {
             self.kick(TextComponent::text(
-                "Send Teleport confirm, but we did not teleport",
+                "Client sent teleport confirm, but we did not teleport.",
             ))
             .await;
         }
