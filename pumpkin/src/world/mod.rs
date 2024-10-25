@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 pub mod player_chunker;
+pub mod transform;
 
 use crate::{
     client::Client,
@@ -30,6 +31,7 @@ use rand::{thread_rng, Rng};
 use scoreboard::Scoreboard;
 use tokio::sync::{mpsc, RwLock};
 use tokio::sync::{mpsc::Receiver, Mutex};
+use transform::Transform;
 
 pub mod scoreboard;
 
@@ -124,9 +126,9 @@ impl World {
         let entity_id = player.entity_id();
         let gamemode = player.gamemode.load();
         log::debug!(
-            "spawning player {}, entity id {}",
+            "spawning player {}, entity id {}, gamemode",
             player.gameprofile.name,
-            entity_id
+            entity_id,
         );
 
         // login packet for our new player
@@ -164,13 +166,10 @@ impl World {
             .send_packet(&CPlayerAbilities::new(0x02, 0.4, 0.1))
             .await;
 
-        // teleport
-        let position = Vector3::new(10.0, 120.0, 10.0);
-        let yaw = 10.0;
-        let pitch = 10.0;
+        let transform = Transform::new(Vector3::new(10.0, 120.0, 10.0), 10.0, 10.0, true);
 
         log::debug!("Sending player teleport to {}", player.gameprofile.name);
-        player.teleport(position, yaw, pitch).await;
+        player.teleport(&transform).await;
 
         let pos = player.living_entity.entity.pos.load();
         player.last_position.store(pos);
@@ -232,12 +231,12 @@ impl World {
                 entity_id.into(),
                 gameprofile.id,
                 (EntityType::Player as i32).into(),
-                position.x,
-                position.y,
-                position.z,
-                pitch,
-                yaw,
-                yaw,
+                transform.position.x,
+                transform.position.y,
+                transform.position.z,
+                transform.pitch,
+                transform.yaw,
+                transform.yaw,
                 0.into(),
                 0.0,
                 0.0,

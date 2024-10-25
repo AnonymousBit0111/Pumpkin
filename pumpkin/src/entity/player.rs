@@ -39,7 +39,7 @@ use super::Entity;
 use crate::{
     client::{authentication::GameProfile, Client, PlayerConfig},
     server::Server,
-    world::World,
+    world::{transform::Transform, World},
 };
 use crate::{error::PumpkinError, world::player_chunker::get_view_distance};
 
@@ -234,7 +234,7 @@ impl Player {
     }
 
     /// yaw and pitch in degrees
-    pub async fn teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
+    pub async fn teleport(&self, transform: &Transform) {
         // this is the ultra special magic code used to create the teleport id
         // This returns the old value
         let i = self
@@ -246,16 +246,20 @@ impl Player {
         }
         let teleport_id = i + 1;
         let entity = &self.living_entity.entity;
-        entity.set_pos(position.x, position.y, position.z);
-        entity.set_rotation(yaw, pitch);
-        *self.awaiting_teleport.lock().await = Some((teleport_id.into(), position));
+        entity.set_pos(
+            transform.position.x,
+            transform.position.y,
+            transform.position.z,
+        );
+        entity.set_rotation(transform.yaw, transform.pitch);
+        *self.awaiting_teleport.lock().await = Some((teleport_id.into(), transform.position));
         self.client
             .send_packet(&CSyncPlayerPosition::new(
                 teleport_id.into(),
-                position,
+                transform.position,
                 Vector3::new(0.0, 0.0, 0.0),
-                yaw,
-                pitch,
+                transform.yaw,
+                transform.pitch,
                 &[],
             ))
             .await;
@@ -283,10 +287,17 @@ impl Player {
 
     /// Kicks the Client with a reason depending on the connection state
     pub async fn kick<'a>(&self, reason: TextComponent<'a>) {
-        assert!(!self
+        if !self
             .client
             .closed
-            .load(std::sync::atomic::Ordering::Relaxed));
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            log::info!(
+                "{} has already closed the connection and the server tried to kick them",
+                self.gameprofile.name
+            );
+            return;
+        }
 
         self.client
             .try_send_packet(&CPlayDisconnect::new(&reason))
